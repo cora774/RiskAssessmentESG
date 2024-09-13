@@ -3,6 +3,7 @@
 ## Project Overview: 
 This analysis evaluates the Environmental, Social, and Governance (ESG) risk scores of companies within the S&P 500, identifying which sectors, industries, and companies face the highest ESG-related risks. 
 
+   Open Project2esg.ipynb file to access code, visualizations, and analysis.
 
 ## Dataset:  
 (2023) S&P 500 ESG Risk Ratings [Data set]. Kaggle. https://doi.org/10.34740/KAGGLE/DS/3660201
