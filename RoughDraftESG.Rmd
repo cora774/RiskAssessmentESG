@@ -1,0 +1,422 @@
+---
+title: "ESG Risk Ratings Assessment"
+author: "Cora Blomberg"
+date: "2024-07-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+library(formattable)
+library(kableExtra)
+
+esg <- read.csv("~/Desktop/Datasets/esg.csv")
+```
+
+<br><br>
+
+## S&P 500 ESG Risk Ratings: Data Preview 
+<hr>
+Pritish Dugar. (2023). S&P 500 ESG Risk Ratings [Data set]. Kaggle. https://doi.org/10.34740/KAGGLE/DS/3660201 
+<br>
+Alternative url: https://www.kaggle.com/datasets/pritish509/s-and-p-500-esg-risk-ratings
+<hr><br>
+
+```{r, echo = FALSE}
+
+esg_preview <- esg %>%
+  select(Name, Sector, Industry, Full.Time.Employees, Environment.Risk.Score, Governance.Risk.Score, Social.Risk.Score, Total.ESG.Risk.score) %>%
+  rename(
+    `Full Time Employees` = Full.Time.Employees,
+    `Environment Risk Score` = Environment.Risk.Score,
+    `Governance Risk Score` = Governance.Risk.Score,
+    `Social Risk Score` = Social.Risk.Score,
+    `Total Risk Score` = Total.ESG.Risk.score
+  ) %>%
+  filter(
+    !is.na(`Full Time Employees`) &
+    !is.na(`Environment Risk Score`) &
+    !is.na(`Governance Risk Score`) &
+    !is.na(`Social Risk Score`) &
+    !is.na(`Total Risk Score`)
+  ) %>%
+  head(4)
+
+kable(esg_preview, format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+
+```
+\vspace{2cm}
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!75!black, title=My Textbox Title]
+  This Kaggle dataset showcases the S&P 500 (the 500 largest publicly-traded companies on the US stock exchange). Environmental, Social, and Governance (ESG) is a way that companies can be scored and rated against others regarding issues of sustainability and social justice. The G in ESG has to do with each company's internal structure and capabilities to address these issues. These three categories are best understood by economic entities as "risks", therefore, the data set depicts ESG factors as "risks to business" on a scale of 0 to 25. 
+\end{tcolorbox}
+<br><br>
+
+## Problem Identification
+<hr>
+<div style="font-size:20px;">
+  Which economic sectors, industries, and companies are most at risk to ESG Factors?
+</div>
+<br><br><br><br>
+
+## ESG Risk Scores by Category
+<hr>
+<br>
+```{r, echo = FALSE}
+esg_risks_density <- esg %>%
+  select(Environment.Risk.Score, Governance.Risk.Score, Social.Risk.Score) %>%
+  gather(key = "Category", value = "Score") %>%
+  filter(!is.na(Score))
+
+risks_density_colors <- c(
+  "Environment.Risk.Score" = "green",
+  "Governance.Risk.Score" = "purple",
+  "Social.Risk.Score" = "orangered1"
+)
+
+ggplot(esg_risks_density, aes(x = Score, fill = Category)) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Combined Density Distribution of ESG Scores",
+       x = "ESG Scores",
+       y = "Density",
+       fill = "Risk Score Category") +
+  theme(legend.position = "bottom") + 
+  scale_fill_manual(values = risks_density_colors) 
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  The density plot above depicts the distribution of ESG risk scores for each ESG Category. Governance scores have the highest concentration of scores between 3 and 8.
+  Environmental scores tend to be lower, but the density distribution has a long tail.
+  Social scores are the most normally distributed around 8. Social scores have more concentration of higher scores than the other two categories.
+</div>
+<br><br>
+```{r, echo=FALSE}
+#Boxplots
+ggplot(esg_risks_density, aes(x = Category, y = Score, fill = Category)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Boxplots of Environment, Governance, and Social Risk Scores",
+       x = "Risk Score Category",
+       y = "Score",
+       fill = "Category") +
+  scale_fill_manual(values = risks_density_colors) +
+  guides(fill = "none")
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Boxplots restate ideas in the previous density plot through a statistical lens. As seen above, environmental scores have the largest range, but the lowest average scores of the three categories. Governance risks have a small range, but holds second highest score average. Social risks are between the other categories as far as range, but holds the highest average risk score.  
+</div>
+<br><br>
+```{r, echo = FALSE}
+esg_outliers_long <- esg %>%
+  pivot_longer(cols = c(Environment.Risk.Score, Governance.Risk.Score, Social.Risk.Score),
+               names_to = "Category", values_to = "Score") %>%
+  filter(!is.na(Score))
+
+outlier_scores <- esg_outliers_long %>%
+  group_by(Category) %>%
+  top_n(5, wt = Score) %>%
+  ungroup()
+
+ggplot(outlier_scores, aes(x = Category, y = Score, label = Name, color = Category)) +
+  geom_point() +
+  geom_text_repel(aes(label = Name), size = 3) +
+  theme_minimal() +
+  labs(title = "Outlier Companies with the Highest Risk Scores in each Category",
+       x = "Risk Score Category",
+       y = "Score",
+       color = "Category") +
+  scale_color_manual(values = risks_density_colors) +
+  theme(legend.position = "none")
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Usually, outliers are special cases, but in this context, extremely high scores can indicate companies that are particularly prone to ESG Risks. The above plot exposes outlier companies with the highest environmental, social, and governance risks. 
+</div>
+<br>
+```{r, echo = FALSE}
+risks_sums <- colSums(esg[, c("Environment.Risk.Score", "Governance.Risk.Score", "Social.Risk.Score")], na.rm = TRUE)
+esg_risks_sums <- data.frame(Category = names(risks_sums), Score = risks_sums)
+
+ggplot(esg_risks_sums, aes(x = Category, y = Score, fill = Category)) +
+  geom_bar(stat = "identity", alpha = 0.5, color = "black") + 
+  theme_minimal() + 
+  labs(title = "Aggregated Sum of ESG Risk Scores",
+       x = "ESG Categories",
+       y = "Sum of Scores",
+      fill = "Category") + 
+      scale_fill_manual(values = risks_density_colors) +
+  theme(axis.text.x = element_text())+
+  theme(legend.position = "none")
+
+```
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  The above chart aggregates ESG risk scores by ESG category. It is important to note, that social risks are the greatest, followed by governance risks, and finally environmental risks. The following visualizations dive into each of these categories.
+</div>
+
+<br><br>
+
+## ESG Scores by Sector 
+<hr>
+<br>
+```{r, echo = FALSE}
+esg_risks_sums_by_sector <- esg %>%
+  group_by(Sector) %>%
+  filter(!is.na(Sector) & Sector != "") %>%
+  summarise(
+    Environment_Risk_Score = sum(Environment.Risk.Score, na.rm = TRUE),
+    Governance_Risk_Score = sum(Governance.Risk.Score, na.rm = TRUE),
+    Social_Risk_Score = sum(Social.Risk.Score, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -Sector, names_to = "Category", values_to = "Score")
+
+esg_filtered_sectors <- esg %>%
+  filter(!is.na(Sector) & Sector != "")
+                       
+sector_colors <- c(
+  "Basic Materials" = "indianred1",
+  "Communication Services" = "sienna1",
+  "Consumer Cyclical" = "orange2", 
+  "Consumer Defensive" = "yellow3",
+  "Energy" = "olivedrab4", 
+  "Financial Services" = "mediumseagreen",
+  "Healthcare" = "turquoise3",
+  "Industrials" = "royalblue1", 
+  "Real Estate" = "slateblue3",
+  "Technology" = "purple1",
+  "Utilities" = "orchid2"
+)
+
+ggplot(esg_risks_sums_by_sector, aes(x = Category, y = Score, fill = Sector)) +
+  geom_bar(stat = "identity", position = position_dodge(), alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "Sum of ESG Related Scores by Sector",
+       x = "ESG Categories",
+       y = "Sum of Scores",
+       fill = "Sector") +
+  scale_fill_manual(values = sector_colors) +
+  theme(axis.text.x = element_text(angle = 10))
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Please note the change in colors. The following visualizations are no longer coordinated with ESG categories (environment, social, & governance). Instead, colors are assigned to sectors. The above chart aggregates the sum of scores by ESG category (the same as the previous chart), but it is further divided by economic sector. From these results, sectors that are most influential to each category's aggregate score can be identified. 
+</div>
+<br><br>
+```{r, echo = FALSE}
+top7_sectors_social_risks <- esg %>%
+  group_by(Sector) %>%
+  summarize(Social_Risk_Score = sum(Social.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Social_Risk_Score)) %>%
+  top_n(7, Social_Risk_Score)
+
+
+ggplot(top7_sectors_social_risks, aes(x = reorder(Sector, -Social_Risk_Score), y = Social_Risk_Score, fill = Sector)) +
+  geom_bar(stat = "identity", alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Top 7 Sectors with the Worst Social Risk Scores",
+       x = "Sector",
+       y = "Total Social Risk Score",
+       fill = "Sector") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = sector_colors) +
+  guides(fill = "none")
+
+worst_industries_soc <- esg %>%
+  filter(Sector %in% c("Industrials", "Healthcare", "Financial Services")) %>%
+  group_by(Industry) %>%
+  summarise(Social_Risk_Score = sum(Social.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Social_Risk_Score)) %>%
+  top_n(5, Social_Risk_Score)
+
+kable(worst_industries_soc, format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  The top three sectors that contribute to high social risk scores are Industrials, Healthcare, and Financial Services. Within these three economic sectors, the top 5 sub-sectors, or industries, are computed in the chart. The worst industries are Specialty Industrial Machinery, Drug Manufacturers, and Aerospace & Defense. It may be notable that these industries rely on factory-like conditions which may indicate issues with worker safety and worker exploitation. 
+</div>
+<br><br>
+```{r, echo = FALSE}
+top7_sectors_env_risks <- esg %>%
+  group_by(Sector) %>%
+  summarize(Env_Risk_Score = sum(Environment.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Env_Risk_Score)) %>%
+  top_n(7, Env_Risk_Score)
+
+ggplot(top7_sectors_env_risks, aes(x = reorder(Sector, -Env_Risk_Score), y = Env_Risk_Score, fill = Sector)) +
+  geom_bar(stat = "identity", alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Top 7 Sectors with the Worst Environmental Risk Scores",
+       x = "Sector",
+       y = "Total Environmental Risk Score",
+       fill = "Sector") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = sector_colors) +
+  guides(fill = "none")
+
+worst_industries_env <- esg %>%
+  filter(Sector %in% c("Industrials", "Energy", "Utilities")) %>%
+  group_by(Industry) %>%
+  summarise(Env_Risk_Score = sum(Environment.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Env_Risk_Score)) %>%
+  top_n(5, Env_Risk_Score)
+
+kable(worst_industries_env, format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Similarly, the top three sectors contributing to high environmental risk scores are Industrials (again), Energy, and Utilities. Remember from the boxplots above, that the environmental category's outliers have the highest risk scores. This reaffirms how the industry with the worst environmental risk scores, clocks in at 253; over 100 points higher than the industry with the highest social risk scores. Note that American energy demand is a lot higher than other countries, therefore, a high score for utilities and oil & gas industries can indicate the higher volume of energy-use in the US (consumer-driven risk scores > company-driven risk scores). 
+</div>
+<br><br>
+```{r, echo = FALSE}
+top7_sectors_gov_risks <- esg %>%
+  group_by(Sector) %>%
+  summarize(Gov_Risk_Score = sum(Governance.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Gov_Risk_Score)) %>%
+  top_n(7, Gov_Risk_Score)
+
+ggplot(top7_sectors_gov_risks, aes(x = reorder(Sector, -Gov_Risk_Score), y = Gov_Risk_Score, fill = Sector)) +
+  geom_bar(stat = "identity", alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Top 7 Sectors with the Worst Governmental Risk Scores",
+       x = "Sector",
+       y = "Total Governmental Risk Score",
+       fill = "Sector") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = sector_colors) +
+  guides(fill = "none")
+
+worst_industries_gov <- esg %>%
+  filter(Sector %in% c("Financial Services")) %>%
+  group_by(Industry) %>%
+  summarise(Gov_Risk_Score = sum(Governance.Risk.Score, na.rm = TRUE)) %>%
+  arrange(desc(Gov_Risk_Score)) %>%
+  top_n(5, Gov_Risk_Score)
+kable(worst_industries_gov, format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+\vspace{2cm}
+ <div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Financial Services, by far, is the sector with the worst governance scores. It is also one of the worst sectors in the social risks category. It is also notable that Healthcare (second worst sector) contributes to high scores in social risks as well, and Industrials (third worst) contributes to high scores in all three: social, environmental, and governance risks. The industry that contributes the most to high governance scores is Regional Banks. Remember, that Governance refers to the quality of companies' internal strategies to address ESG. This may indicate that banks tend to deem sustainability and social factors as immaterial to their business.  
+</div>
+
+<br><br>
+
+## Employee Count vs Total Scores
+<hr>
+<br>
+```{r, echo = FALSE}
+#makes employee column nice for scale y continuous in ggplot
+esg$Full.Time.Employees <- as.numeric(gsub(",", "", esg$Full.Time.Employees))
+
+#prep data
+esg_employees_total_sector <- esg %>%
+  select(Total.ESG.Risk.score, Full.Time.Employees, Sector) %>%
+  rename(
+    `Total Risk Score` = Total.ESG.Risk.score,
+    `Full Time Employees` = Full.Time.Employees
+  ) %>%
+  filter(!is.na(`Total Risk Score`) & !is.na(`Full Time Employees`) & !is.na(Sector)) %>%
+  arrange(desc(`Full Time Employees`)) %>%
+  slice(-(1:3))
+
+#regression_line
+employee_risks_regression <- cor(esg_employees_total_sector$`Total Risk Score`, esg_employees_total_sector$`Full Time Employees`)
+
+#plot
+ggplot(esg_employees_total_sector, aes(x = `Full Time Employees`, y = `Total Risk Score`, color = Sector)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Total Risk Scores vs. Full Time Employees by Sector",
+       x = "Full Time Employees", 
+       y = "Total Risk Score") +
+       scale_color_manual(values = sector_colors)
+```
+<hr>
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  The above scatterplot aims to find a correlation between company size and Total ESG risk scores. Colors are, again, coded by sector. Visually, there appears to be even distribution: large companies have high and low scores, as do small companies. Sector trends simply reinforce ideas from the previous charts. 
+</div>
+<br>
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#makes employee column nice for scale y continuous in ggplot
+esg$Full.Time.Employees <- as.numeric(gsub(",", "", esg$Full.Time.Employees))
+
+#prep data
+esg_employees_total_sector <- esg %>%
+  select(Total.ESG.Risk.score, Full.Time.Employees, Sector) %>%
+  rename(
+    `Total Risk Score` = Total.ESG.Risk.score,
+    `Full Time Employees` = Full.Time.Employees
+  ) %>%
+  filter(!is.na(`Total Risk Score`) & !is.na(`Full Time Employees`) & !is.na(Sector)) %>%
+  arrange(desc(`Full Time Employees`)) %>%
+  slice(-(1:3))
+
+#regression_line
+employee_risks_regression <- cor(esg_employees_total_sector$`Total Risk Score`, esg_employees_total_sector$`Full Time Employees`)
+
+#plot
+ggplot(esg_employees_total_sector, aes(x = `Full Time Employees`, y = `Total Risk Score`, color = Sector)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Total Risk Scores vs. Full Time Employees by Sector",
+       x = "Full Time Employees", 
+       y = "Total Risk Score") +
+       scale_color_manual(values = sector_colors)
+
+```
+\vspace{2cm}
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Layering on a linear regression (dashed, black line), the initial conclusion is reinforced; There is a slight negative correlation, however, the trend is virtually a horizontal line. This concludes that company size does not have an impact on ESG scores.
+</div>
+\vspace{2cm} 
+
+\newpage
+
+## Top 10 Worst Scores Overall 
+<hr>
+<br>
+```{r, echo = FALSE}
+esg_worst_scores <- esg %>%
+  select(Name, Sector, Industry, Total.ESG.Risk.score) %>%
+  rename(
+    `Total Risk Score` = Total.ESG.Risk.score
+  ) %>%
+  filter(!is.na(`Total Risk Score`)) %>%
+  arrange(desc(`Total Risk Score`)) %>%
+  head(10)
+
+kable(esg_worst_scores, format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+
+```
+<hr>
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  In one final exposé: the top 10 companies with the worst scores across all categories are displayed above. All Companies are in the Industrials and Energy sectors, with the top worst industries being Oil & Gas, and Aerospace & Defense.
+</div>
+\vspace{2cm}
+
+\newpage
+
+## Conclusion 
+<div style="border:1px solid #000; padding: 10px; background-color: #f9f9f9;">
+  Of the three categories, the S&P 500 is at most risk to social factors. Second is governance, and third is environment. Environmental risks have the largest range and holds the highest scores. Economic sectors that contribute most to high scores are Industrials, Financial Services, and Healthcare. Sub-sectors, or industries, that contribute the most are Oil & Gas, Utilities, Aerospace & Defense, Manufacturers, and Regional Banks. Company size has little to do with ESG Scores, rather, sector and industry are a far better indicators. 
+</div>
+
+e plot.
